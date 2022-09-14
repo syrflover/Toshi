@@ -56,17 +56,36 @@ pub fn setup_logging_from_file(_: &str) -> Result<Logger> {
 
 #[cfg(feature = "extra_tokenizers")]
 pub fn register_tokenizers(idx: tantivy::Index) -> tantivy::Index {
+    use lindera_tantivy::{
+        mode::Mode,
+        tokenizer::{DictionaryConfig, DictionaryKind, LinderaTokenizer, TokenizerConfig},
+    };
+
     let schema = idx.schema();
     let has_tokenizer = schema.fields().find(|(_, entry)| match entry.field_type() {
         tantivy::schema::FieldType::Str(ref opts) => opts
             .get_indexing_options()
-            .map(|to| to.tokenizer() == cang_jie::CANG_JIE)
+            .map(|to| to.tokenizer() == cang_jie::CANG_JIE || to.tokenizer() == "lang_ko")
             .unwrap_or(false),
         _ => false,
     });
     if has_tokenizer.is_some() {
+        let tokenizers = idx.tokenizers();
+
         let tokenizer = cang_jie::CangJieTokenizer::default();
-        idx.tokenizers().register(cang_jie::CANG_JIE, tokenizer)
+        tokenizers.register(cang_jie::CANG_JIE, tokenizer);
+
+        let dictionary = DictionaryConfig {
+            kind: DictionaryKind::KoDic,
+            path: None,
+        };
+        let config = TokenizerConfig {
+            dictionary,
+            user_dictionary: None,
+            mode: Mode::Normal,
+        };
+        let tokenizer = LinderaTokenizer::with_config(config).unwrap();
+        tokenizers.register("lang_ko", tokenizer);
     }
     idx
 }
